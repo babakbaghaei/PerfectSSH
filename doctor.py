@@ -161,6 +161,16 @@ class AutoDoctor:
         log "Checking network routes..."
         ip route show | head -3
 
+        log "Fixing DNS settings..."
+        if [ -f /etc/resolv.conf ]; then
+            cp /etc/resolv.conf /etc/resolv.conf.backup 2>/dev/null
+            chattr -i /etc/resolv.conf 2>/dev/null
+            echo "nameserver 8.8.8.8" > /etc/resolv.conf
+            echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+            # Try to lock it to prevent DHCP overwrites
+            chattr +i /etc/resolv.conf 2>/dev/null
+        fi
+
         log "Network repair complete"
         """
         self._run_remote_script(hop_config, network_script, "network_repair")
@@ -196,6 +206,10 @@ class AutoDoctor:
         sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 6/g' $CFG
         sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/g' $CFG
         sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/g' $CFG
+        
+        # Increase concurrency limits for heavy browsing (images/video)
+        sed -i 's/^#\?MaxSessions.*/MaxSessions 1000/g' $CFG
+        sed -i 's/^#\?MaxStartups.*/MaxStartups 100:30:1000/g' $CFG
 
         # Get SSH port
         PORT=$(grep "^Port" $CFG | awk '{print $2}')
@@ -284,11 +298,19 @@ class AutoDoctor:
         fi
 
         log "Checking system updates..."
-        if command -v apt-get >/dev/null;
+        if command -v apt-get >/dev/null; then
             apt-get update >/dev/null 2>&1 && apt-get -y upgrade >/dev/null 2>&1
-        elif command -v yum >/dev/null;
+        elif command -v yum >/dev/null; then
             yum -y update >/dev/null 2>&1
         fi
+
+        log "Increasing system limits..."
+        echo "fs.file-max = 65535" >> /etc/sysctl.conf
+        echo "net.core.somaxconn = 4096" >> /etc/sysctl.conf
+        echo "net.ipv4.ip_local_port_range = 1024 65535" >> /etc/sysctl.conf
+        sysctl -p >/dev/null 2>&1
+        
+        ulimit -n 65535 2>/dev/null || true
 
         log "Performance optimization complete"
         """

@@ -56,9 +56,8 @@ class SocksProxy:
                         addr_len = ord(self.request.recv(1))
                         dest_addr = self.request.recv(addr_len).decode()
                     elif atyp == 4: # IPv6
-                        # Not supported in this basic impl
-                        self.request.sendall(b"\x05\x08\x00\x01\x00\x00\x00\x00\x00\x00")
-                        return
+                        addr_bytes = self.request.recv(16)
+                        dest_addr = socket.inet_ntop(socket.AF_INET6, addr_bytes)
                     else:
                         return
 
@@ -95,11 +94,11 @@ class SocksProxy:
                     while True:
                         r, w, x = select.select([client, remote], [], [], 60)
                         if client in r:
-                            data = client.recv(32768)
+                            data = client.recv(4096)
                             if not data: break
                             remote.sendall(data)
                         if remote in r:
-                            data = remote.recv(32768)
+                            data = remote.recv(4096)
                             if not data: break
                             client.sendall(data)
                 except:
