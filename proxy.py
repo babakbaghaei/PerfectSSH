@@ -94,11 +94,11 @@ class SocksProxy:
                     while True:
                         r, w, x = select.select([client, remote], [], [], 60)
                         if client in r:
-                            data = client.recv(4096)
+                            data = client.recv(16384)
                             if not data: break
                             remote.sendall(data)
                         if remote in r:
-                            data = remote.recv(4096)
+                            data = remote.recv(16384)
                             if not data: break
                             client.sendall(data)
                 except:

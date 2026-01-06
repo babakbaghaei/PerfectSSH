@@ -163,19 +163,15 @@ class AutoDoctor:
 
         log "Fixing DNS settings..."
         if [ -f /etc/resolv.conf ]; then
+            # Backup
             cp /etc/resolv.conf /etc/resolv.conf.backup 2>/dev/null
-            chattr -i /etc/resolv.conf 2>/dev/null
+            # unlocking just in case we locked it before
+            chattr -i /etc/resolv.conf 2>/dev/null || true
+            
+            # Simple overwrite
             echo "nameserver 8.8.8.8" > /etc/resolv.conf
             echo "nameserver 1.1.1.1" >> /etc/resolv.conf
-            # Try to lock it to prevent DHCP overwrites
-            chattr +i /etc/resolv.conf 2>/dev/null
         fi
-
-        log "Disabling IPv6 to prevent routing issues..."
-        echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
-        echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.conf
-        echo "net.ipv6.conf.lo.disable_ipv6 = 1" >> /etc/sysctl.conf
-        sysctl -p >/dev/null 2>&1
 
         log "Network repair complete"
         """
