@@ -9,8 +9,9 @@ from datetime import datetime
 from typing import Tuple, Optional, Dict, Any
 import paramiko
 import logging
-from .utils import SystemUtils
-from .config import ConfigManager
+from utils import SystemUtils
+from config import ConfigManager
+from proxy import SocksProxy
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,8 @@ class TunnelManager:
     def __init__(self):
         self.config_manager = ConfigManager()
         self.ssh_client: Optional[paramiko.SSHClient] = None
+        self.relay_client: Optional[paramiko.SSHClient] = None
+        self.socks_proxy: Optional[SocksProxy] = None
         self.monitor = TrafficMonitor()
         self.start_time: Optional[datetime] = None
         self.max_retries: int = 3
@@ -108,7 +111,8 @@ class TunnelManager:
             
             # Start SOCKS proxy
             transport = self.ssh_client.get_transport()
-            transport.request_port_forward('', cfg['local_port'])
+            self.socks_proxy = SocksProxy(cfg['local_port'], transport)
+            self.socks_proxy.start()
             
             self.start_time = datetime.now()
             self.monitor.start()
@@ -135,11 +139,11 @@ class TunnelManager:
         
         logger.info(f"Connecting to relay {hop1['ip']}:{hop1['port']} as {hop1['user']}")
         # Connect to relay first
-        relay_client = paramiko.SSHClient()
-        relay_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.relay_client = paramiko.SSHClient()
+        self.relay_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         
         try:
-            relay_client.connect(
+            self.relay_client.connect(
                 hostname=hop1['ip'],
                 port=int(hop1['port']),
                 username=hop1['user'],
@@ -149,7 +153,7 @@ class TunnelManager:
             
             logger.info(f"Relay connected, now connecting to destination {hop2['ip']}:{hop2['port']} as {hop2['user']}")
             # Use relay as proxy for destination
-            sock = relay_client.get_transport().open_channel(
+            sock = self.relay_client.get_transport().open_channel(
                 'direct-tcpip', (hop2['ip'], int(hop2['port'])), ('', 0)
             )
             
@@ -166,7 +170,8 @@ class TunnelManager:
             
             # Start SOCKS proxy
             transport = self.ssh_client.get_transport()
-            transport.request_port_forward('', cfg['local_port'])
+            self.socks_proxy = SocksProxy(cfg['local_port'], transport)
+            self.socks_proxy.start()
             
             self.start_time = datetime.now()
             self.monitor.start()
@@ -176,117 +181,33 @@ class TunnelManager:
             
         except paramiko.AuthenticationException:
             logger.error("Authentication failed for bridge connection")
+            if self.relay_client:
+                self.relay_client.close()
             return False, "Authentication failed"
         except paramiko.SSHException as e:
             logger.error(f"SSH error in bridge connection: {e}")
+            if self.relay_client:
+                self.relay_client.close()
             return False, str(e)
         except Exception as e:
             logger.error(f"Unexpected error in bridge connection: {e}")
+            if self.relay_client:
+                self.relay_client.close()
             return False, str(e)
-        finally:
-            if relay_client:
-                relay_client.close()
 
     def disconnect(self) -> None:
         logger.info("Disconnecting tunnel")
+        if self.socks_proxy:
+            self.socks_proxy.stop()
+            self.socks_proxy = None
+            logger.debug("SOCKS proxy stopped")
         if self.ssh_client:
             self.ssh_client.close()
             logger.debug("SSH client closed")
+        if self.relay_client:
+            self.relay_client.close()
+            logger.debug("Relay client closed")
         self.monitor.stop()
         SystemUtils.set_system_proxy(False)
         SystemUtils.kill_existing_ssh()
         logger.info("Tunnel disconnected successfully")
-
-    def _connect_direct(self, cfg):
-        hop1 = cfg['hop1']
-        if not hop1['ip']:
-            return False, "Server IP is missing."
-        
-        self.ssh_client = paramiko.SSHClient()
-        self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
-        try:
-            self.ssh_client.connect(
-                hostname=hop1['ip'],
-                port=int(hop1['port']),
-                username=hop1['user'],
-                password=hop1['pass'],
-                timeout=10
-            )
-            
-            # Start SOCKS proxy
-            transport = self.ssh_client.get_transport()
-            transport.request_port_forward('', cfg['local_port'])
-            
-            self.start_time = datetime.now()
-            self.monitor.start()
-            SystemUtils.set_system_proxy(True, cfg['local_port'])
-            return True, "Connected"
-            
-        except paramiko.AuthenticationException:
-            return False, "Authentication failed"
-        except paramiko.SSHException as e:
-            return False, str(e)
-        except Exception as e:
-            return False, str(e)
-
-    def _connect_bridge(self, cfg):
-        hop1 = cfg['hop1']  # Relay
-        hop2 = cfg['hop2']  # Destination
-        if not hop1['ip'] or not hop2['ip']:
-            return False, "Server IPs are missing."
-        
-        # Connect to relay first
-        relay_client = paramiko.SSHClient()
-        relay_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
-        try:
-            relay_client.connect(
-                hostname=hop1['ip'],
-                port=int(hop1['port']),
-                username=hop1['user'],
-                password=hop1['pass'],
-                timeout=10
-            )
-            
-            # Use relay as proxy for destination
-            sock = relay_client.get_transport().open_channel(
-                'direct-tcpip', (hop2['ip'], int(hop2['port'])), ('', 0)
-            )
-            
-            self.ssh_client = paramiko.SSHClient()
-            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.ssh_client.connect(
-                hostname=hop2['ip'],
-                port=int(hop2['port']),
-                username=hop2['user'],
-                password=hop2['pass'],
-                sock=sock,
-                timeout=10
-            )
-            
-            # Start SOCKS proxy
-            transport = self.ssh_client.get_transport()
-            transport.request_port_forward('', cfg['local_port'])
-            
-            self.start_time = datetime.now()
-            self.monitor.start()
-            SystemUtils.set_system_proxy(True, cfg['local_port'])
-            return True, "Connected"
-            
-        except paramiko.AuthenticationException:
-            return False, "Authentication failed"
-        except paramiko.SSHException as e:
-            return False, str(e)
-        except Exception as e:
-            return False, str(e)
-        finally:
-            if relay_client:
-                relay_client.close()
-
-    def disconnect(self):
-        if self.ssh_client:
-            self.ssh_client.close()
-        self.monitor.stop()
-        SystemUtils.set_system_proxy(False)
-        SystemUtils.kill_existing_ssh()

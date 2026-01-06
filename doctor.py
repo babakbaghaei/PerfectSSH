@@ -5,20 +5,9 @@ Diagnoses and repairs server-side SSH issues.
 
 import subprocess
 import logging
-from .utils import SystemUtils
-
-logger = logging.getLogger(__name__)
-
-class AutoDoctor:
-"""
-PerfectSSH - Auto Doctor
-Diagnoses and repairs server-side SSH issues.
-"""
-
-import subprocess
-import logging
 import time
-from .utils import SystemUtils
+import paramiko
+from utils import SystemUtils
 
 logger = logging.getLogger(__name__)
 
@@ -184,10 +173,10 @@ class AutoDoctor:
         log() { echo ">>> SSH: $1"; }
 
         log "Checking SSH service status..."
-        if command -v systemctl >/dev/null; then
+        if command -v systemctl >/dev/null;
             systemctl is-active sshd >/dev/null 2>&1 || systemctl start sshd
             systemctl enable sshd >/dev/null 2>&1
-        elif command -v service >/dev/null; then
+        elif command -v service >/dev/null;
             service ssh status >/dev/null 2>&1 || service ssh start
         fi
 
@@ -213,31 +202,31 @@ class AutoDoctor:
         [ -z "$PORT" ] && PORT=22
 
         log "Opening firewall for SSH port $PORT..."
-        if command -v ufw >/dev/null; then
+        if command -v ufw >/dev/null;
             ufw --force enable >/dev/null 2>&1
             ufw allow $PORT/tcp >/dev/null 2>&1
             ufw allow 1080/tcp >/dev/null 2>&1
             ufw reload >/dev/null 2>&1
         fi
 
-        if command -v iptables >/dev/null; then
+        if command -v iptables >/dev/null;
             iptables -I INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null
             iptables -I INPUT -p tcp --dport 1080 -j ACCEPT 2>/dev/null
-            if command -v iptables-save >/dev/null; then
+            if command -v iptables-save >/dev/null;
                 iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
             fi
         fi
 
-        if command -v firewall-cmd >/dev/null; then
+        if command -v firewall-cmd >/dev/null;
             firewall-cmd --permanent --add-port=$PORT/tcp >/dev/null 2>&1
             firewall-cmd --permanent --add-port=1080/tcp >/dev/null 2>&1
             firewall-cmd --reload >/dev/null 2>&1
         fi
 
         log "Restarting SSH service..."
-        if command -v systemctl >/dev/null; then
+        if command -v systemctl >/dev/null;
             systemctl restart sshd
-        elif command -v service >/dev/null; then
+        elif command -v service >/dev/null;
             service ssh restart
         fi
 
@@ -279,14 +268,14 @@ class AutoDoctor:
         log() { echo ">>> Performance: $1"; }
 
         log "Enabling BBR congestion control..."
-        if ! grep -q "bbr" /etc/sysctl.conf 2>/dev/null; then
+        if ! grep -q "bbr" /etc/sysctl.conf 2>/dev/null;
             echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
             echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
             sysctl -p >/dev/null 2>&1
         fi
 
         log "Optimizing network buffers..."
-        if ! grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null; then
+        if ! grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null;
             echo "net.core.rmem_max=16777216" >> /etc/sysctl.conf
             echo "net.core.wmem_max=16777216" >> /etc/sysctl.conf
             echo "net.ipv4.tcp_rmem=4096 87380 16777216" >> /etc/sysctl.conf
@@ -295,9 +284,9 @@ class AutoDoctor:
         fi
 
         log "Checking system updates..."
-        if command -v apt-get >/dev/null; then
+        if command -v apt-get >/dev/null;
             apt-get update >/dev/null 2>&1 && apt-get -y upgrade >/dev/null 2>&1
-        elif command -v yum >/dev/null; then
+        elif command -v yum >/dev/null;
             yum -y update >/dev/null 2>&1
         fi
 
@@ -314,9 +303,9 @@ class AutoDoctor:
         log() { echo ">>> Verification: $1"; }
 
         log "Checking SSH service..."
-        if command -v systemctl >/dev/null; then
+        if command -v systemctl >/dev/null;
             systemctl is-active sshd >/dev/null 2>&1 && echo "SSH_ACTIVE"
-        elif command -v service >/dev/null; then
+        elif command -v service >/dev/null;
             service ssh status >/dev/null 2>&1 && echo "SSH_ACTIVE"
         fi
 
@@ -327,9 +316,9 @@ class AutoDoctor:
         PORT=$(grep "^Port" /etc/ssh/sshd_config | awk '{print $2}')
         [ -z "$PORT" ] && PORT=22
 
-        if command -v ufw >/dev/null; then
+        if command -v ufw >/dev/null;
             ufw status | grep -q "$PORT/tcp" && echo "FIREWALL_OPEN"
-        elif command -v iptables >/dev/null; then
+        elif command -v iptables >/dev/null;
             iptables -L | grep -q "dpt:$PORT" && echo "FIREWALL_OPEN"
         fi
 
@@ -342,42 +331,52 @@ class AutoDoctor:
         return False
 
     def _run_remote_script(self, hop_config, script, operation_name):
-        """Execute a script on the remote server."""
+        """Execute a script on the remote server using paramiko."""
         logger.debug(f"Running {operation_name} script on {hop_config['ip']}")
 
-        # Prepare script
-        full_script = script.replace("\n", " ; ")
-
-        # Build SSH command
-        cmd = ['ssh']
-        if not SystemUtils.IS_WIN:
-            cmd = ['sshpass', '-p', hop_config['pass']] + cmd
-
-        cmd += [
-            '-p', str(hop_config['port']),
-            '-o', 'StrictHostKeyChecking=no',
-            '-o', 'ConnectTimeout=15',
-            '-o', 'ServerAliveInterval=10',
-            f"{hop_config['user']}@{hop_config['ip']}",
-            'bash -c ' + repr(full_script)
-        ]
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         try:
-            logger.debug(f"Executing: {' '.join(cmd)}")
-            process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE, text=True)
-            stdout, stderr = process.communicate(timeout=60)
+            client.connect(
+                hostname=hop_config['ip'],
+                port=int(hop_config['port']),
+                username=hop_config['user'],
+                password=hop_config['pass'],
+                timeout=15,
+                banner_timeout=30
+            )
 
-            if process.returncode == 0:
+            logger.debug(f"Executing script via SSH: {operation_name}")
+            # Combine lines and escape appropriately if needed, but paramiko exec_command 
+            # generally handles the command string as is.
+            # The script is a multi-line string, we can execute it by wrapping in bash.
+            # However, simpler is often better. The original code replaced newlines with semicolons.
+            
+            # Using heredoc or passing as argument to bash -s is cleaner for complex scripts
+            # But let's stick to the previous logic of joining with semicolons for simplicity if it works,
+            # or better, just exec_command(script) if it's valid shell syntax.
+            
+            # The original code did: full_script = script.replace("\n", " ; ")
+            # Let's improve this by executing it as a single bash command.
+            
+            stdin, stdout, stderr = client.exec_command(f"bash -c {repr(script)}")
+            
+            # Wait for command to finish
+            exit_status = stdout.channel.recv_exit_status()
+            
+            out_str = stdout.read().decode('utf-8')
+            err_str = stderr.read().decode('utf-8')
+
+            if exit_status == 0:
                 logger.debug(f"{operation_name} completed successfully")
-                return True, stdout
+                return True, out_str
             else:
-                logger.warning(f"{operation_name} failed: {stderr}")
-                return False, stderr
+                logger.warning(f"{operation_name} failed: {err_str}")
+                return False, err_str
 
-        except subprocess.TimeoutExpired:
-            logger.error(f"{operation_name} timed out")
-            return False, "Operation timed out"
         except Exception as e:
             logger.error(f"Exception during {operation_name}: {e}")
             return False, str(e)
+        finally:
+            client.close()

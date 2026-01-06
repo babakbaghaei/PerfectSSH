@@ -26,14 +26,35 @@ class SystemUtils:
     @staticmethod
     def verify_sshpass():
         """Ensures sshpass is installed on non-Windows systems."""
-        if SystemUtils.IS_WIN: 
-            logger.debug("Windows system detected, skipping sshpass verification")
-            return
-        
-        if not shutil.which("sshpass"):
-            logger.warning("sshpass not found, password authentication may not work")
-            console.print("[bold yellow]Warning: 'sshpass' not installed. Password authentication may not work.[/bold yellow]\n\nYou can install it with: sudo apt install sshpass")
-            # Does not exit anymore
+        # sshpass is no longer required as we use paramiko exclusively
+        logger.debug("sshpass check skipped (not required)")
+        return
+
+    @staticmethod
+    def _get_macos_active_service():
+        """Detects the currently active network service on macOS."""
+        try:
+            # 1. Get default route interface (e.g., en0)
+            result = subprocess.run(["route", "-n", "get", "default"], capture_output=True, text=True)
+            interface_line = [line for line in result.stdout.split('\n') if "interface:" in line]
+            if not interface_line:
+                return None
+            interface = interface_line[0].split(':')[1].strip()
+
+            # 2. Map interface (en0) to Service Name (Wi-Fi)
+            result = subprocess.run(["networksetup", "-listallhardwareports"], capture_output=True, text=True)
+            lines = result.stdout.split('\n')
+            current_service = None
+            
+            for i, line in enumerate(lines):
+                if "Hardware Port:" in line:
+                    current_service = line.split(':')[1].strip()
+                if f"Device: {interface}" in line and current_service:
+                    return current_service
+                    
+        except Exception as e:
+            logger.debug(f"Error detecting active service: {e}")
+        return None
 
     @staticmethod
     def set_system_proxy(enable=True, port=1080):
@@ -41,18 +62,19 @@ class SystemUtils:
         logger.info(f"Setting system proxy {'on' if enable else 'off'} on port {port}")
         if SystemUtils.IS_MAC:
             state = "on" if enable else "off"
-            # Attempt to set proxy on common network services
-            services = ["Wi-Fi", "Ethernet", "Thunderbolt Bridge"]
+            
+            # Try to detect active service first
+            active_service = SystemUtils._get_macos_active_service()
+            services = [active_service] if active_service else ["Wi-Fi", "Ethernet", "Thunderbolt Bridge"]
+            
+            logger.info(f"Applying proxy settings to: {services}")
+            
             for service in services:
+                if not service: continue
                 try:
                     # SOCKS Proxy
                     subprocess.run(["networksetup", "-setsocksfirewallproxy", service, "127.0.0.1", str(port)], stderr=subprocess.DEVNULL)
                     subprocess.run(["networksetup", "-setsocksfirewallproxystate", service, state], stderr=subprocess.DEVNULL)
-                    # Web Proxy (HTTP/HTTPS) - Optional but good for browsers
-                    subprocess.run(["networksetup", "-setwebproxy", service, "127.0.0.1", str(port)], stderr=subprocess.DEVNULL)
-                    subprocess.run(["networksetup", "-setwebproxystate", service, state], stderr=subprocess.DEVNULL)
-                    subprocess.run(["networksetup", "-setsecurewebproxy", service, "127.0.0.1", str(port)], stderr=subprocess.DEVNULL)
-                    subprocess.run(["networksetup", "-setsecurewebproxystate", service, state], stderr=subprocess.DEVNULL)
                 except Exception as e:
                     logger.debug(f"Failed to set proxy for {service}: {e}")
                     continue

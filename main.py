@@ -51,12 +51,12 @@ from rich.panel import Panel
 from rich.align import Align
 from rich.prompt import Confirm
 
-from .utils import SystemUtils
-from .config import ConfigManager
-from .tunnel import TunnelManager
-from .doctor import AutoDoctor
-from .ui import get_user_selection, show_dashboard, show_settings
-from .logging_config import setup_logging
+from utils import SystemUtils
+from config import ConfigManager
+from tunnel import TunnelManager
+from doctor import AutoDoctor
+from ui import get_user_selection, show_dashboard, show_settings
+from logging_config import setup_logging
 
 console = Console()
 logger = setup_logging()

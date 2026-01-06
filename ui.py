@@ -1,19 +1,15 @@
-"""
-PerfectSSH - User Interface
-Handles the CLI interface using Rich and Inquirer.
-"""
-
-import time
-import logging
-from datetime import datetime
-from rich.console import Console
-from rich.panel import Panel
+from rich.live import Live
 from rich.layout import Layout
 from rich.align import Align
 from rich.table import Table
 from rich.prompt import Prompt, IntPrompt, Confirm
 from rich import box
 import inquirer
+import time
+import logging
+from datetime import datetime
+from rich.console import Console
+from rich.panel import Panel
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -29,30 +25,42 @@ def get_user_selection(title, choices):
         return None
 
 def show_dashboard(manager):
-    """Displays the connection dashboard."""
+    """Displays the connection dashboard with real-time updates."""
     if manager.ssh_client and manager.ssh_client.get_transport().is_active():
         logger.info("Displaying connection dashboard")
-        rx, tx, total = manager.monitor.get_formatted_stats()
-        uptime = str(datetime.now() - manager.start_time).split('.')[0]
         
-        grid = Table.grid(expand=True)
-        grid.add_column()
-        grid.add_column(justify="right")
-        grid.add_row("[bold green]● CONNECTED[/bold green]", f"Uptime: {uptime}")
-        grid.add_row(f"Mode: {manager.config_manager.config['mode']}", f"Port: {manager.config_manager.config['local_port']}")
-        
-        console.print(Panel(grid, style="green"))
-        
-        traffic_table = Table(show_header=False, expand=True, box=box.SIMPLE)
-        traffic_table.add_row("Download", rx)
-        traffic_table.add_row("Upload", tx)
-        traffic_table.add_row("Session Total", total)
-        
-        console.print(Panel(traffic_table, title="Live Traffic", border_style="magenta"))
-        console.print(Panel(Align.center("Press [bold red]Ctrl+C[/bold red] to Disconnect"), style="dim"))
-        
+        def generate_dashboard():
+            rx, tx, total = manager.monitor.get_formatted_stats()
+            # Handle case where start_time might be None (though it shouldn't be if connected)
+            if manager.start_time:
+                uptime = str(datetime.now() - manager.start_time).split('.')[0]
+            else:
+                uptime = "0:00:00"
+            
+            grid = Table.grid(expand=True)
+            grid.add_column()
+            grid.add_column(justify="right")
+            grid.add_row("[bold green]● CONNECTED[/bold green]", f"Uptime: {uptime}")
+            grid.add_row(f"Mode: {manager.config_manager.config['mode']}", f"Port: {manager.config_manager.config['local_port']}")
+            
+            traffic_table = Table(show_header=False, expand=True, box=box.SIMPLE)
+            traffic_table.add_row("Download", rx)
+            traffic_table.add_row("Upload", tx)
+            traffic_table.add_row("Session Total", total)
+            
+            layout = Layout()
+            layout.split_column(
+                Layout(Panel(grid, style="green")),
+                Layout(Panel(traffic_table, title="Live Traffic", border_style="magenta")),
+                Layout(Panel(Align.center("Press [bold red]Ctrl+C[/bold red] to Disconnect"), style="dim"))
+            )
+            return layout
+
         try:
-            while True: time.sleep(1)
+            with Live(generate_dashboard(), refresh_per_second=1) as live:
+                while True:
+                    time.sleep(1)
+                    live.update(generate_dashboard())
         except KeyboardInterrupt:
             logger.info("User requested disconnection via Ctrl+C")
             manager.disconnect()
