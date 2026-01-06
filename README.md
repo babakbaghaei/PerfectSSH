@@ -5,7 +5,7 @@
 PerfectSSH is a lightweight, cross-platform CLI tool designed to establish secure SSH tunnels easily. It features an intuitive **arrow-key menu**, supports **Multi-Hop (Bridge)** connections, and includes an **Auto-Doctor** to fix server-side issues automatically.
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![Platform](https://img.shields.io/badge/Platform-Mac%20%7C%20Linux%20%7C%20Win-lightgrey)
+![Platform](https://img.shields.io/badge/Platform-Mac%20%7C%20%20Linux%20%7C%20Win-lightgrey)
 
 ## ✨ Features
 
@@ -15,6 +15,10 @@ PerfectSSH is a lightweight, cross-platform CLI tool designed to establish secur
     * **Bridge (2-Hop):** Relay through an intermediate server (e.g., Iran -> Kharej).
 * **🩺 Auto-Doctor:** Automatically diagnoses connection errors and repairs the server (Enables BBR, Fixes SSH Config, Opens Firewall) with one click.
 * **📊 Traffic Monitor:** Real-time upload/download stats.
+* **🔍 Comprehensive Logging:** Detailed logging with file and console output for debugging and monitoring.
+* **🔒 Type Hints:** Full type annotations for better code quality and IDE support.
+* **⚡ Retry Logic:** Automatic retry with exponential backoff for connection failures.
+* **✅ Configuration Validation:** Built-in validation for server configurations.
 * **Cross-Platform:** Works on macOS, Linux, and Windows.
 * **Auto-Install Dependencies:** Automatically installs required Python packages.
 * **System Proxy Integration:** Automatically configures system proxy settings.
@@ -100,12 +104,22 @@ Real-time monitoring of:
 - Total session data transferred.
 - Connection uptime.
 
+## � Logging
+
+PerfectSSH includes comprehensive logging for debugging and monitoring:
+- **File Logging:** All logs are saved to `logs/perfectssh.log`
+- **Console Logging:** Important messages appear in the terminal
+- **Log Levels:** DEBUG, INFO, WARNING, ERROR for different verbosity levels
+- **Connection Tracking:** Detailed connection attempts, successes, and failures
+- **Auto-Doctor Logs:** Repair operations and their outcomes
+
 ## 🐛 Troubleshooting
 
 - **Connection fails:** Check server credentials and network connectivity.
 - **sshpass not found:** Install sshpass or use key-based authentication.
 - **Permission denied:** Ensure correct username/password or SSH keys.
 - **Port issues:** Verify SSH port is open and not blocked by firewall.
+- **Check logs:** Review `logs/perfectssh.log` for detailed error information.
 
 ## 🤝 Contributing
 
