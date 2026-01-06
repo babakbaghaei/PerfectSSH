@@ -171,6 +171,12 @@ class AutoDoctor:
             chattr +i /etc/resolv.conf 2>/dev/null
         fi
 
+        log "Disabling IPv6 to prevent routing issues..."
+        echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
+        echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.conf
+        echo "net.ipv6.conf.lo.disable_ipv6 = 1" >> /etc/sysctl.conf
+        sysctl -p >/dev/null 2>&1
+
         log "Network repair complete"
         """
         self._run_remote_script(hop_config, network_script, "network_repair")
