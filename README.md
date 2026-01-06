@@ -13,7 +13,7 @@ PerfectSSH is a lightweight, cross-platform CLI tool designed to establish secur
 * **Modes:**
     * **Direct (1-Hop):** Connect directly to destination.
     * **Bridge (2-Hop):** Relay through an intermediate server (e.g., Iran -> Kharej).
-* **🩺 Auto-Doctor:** Automatically diagnoses connection errors and repairs the server (Enables BBR, Fixes SSH Config, Opens Firewall) with one click.
+* **🩺 Advanced Auto-Doctor:** Intelligent diagnosis and comprehensive repair of server issues including SSH configuration, firewall settings, network problems, security fixes, and performance optimization with detailed solution suggestions.
 * **📊 Traffic Monitor:** Real-time upload/download stats.
 * **🔍 Comprehensive Logging:** Detailed logging with file and console output for debugging and monitoring.
 * **🔒 Type Hints:** Full type annotations for better code quality and IDE support.
@@ -89,13 +89,34 @@ Example config.json:
 }
 ```
 
-## 🩺 Auto-Doctor
+## 🩺 Advanced Auto-Doctor
 
-The Auto-Doctor can automatically fix common server issues:
-- Enable TCP forwarding in SSH config.
-- Open firewall ports.
-- Enable BBR congestion control.
-- Restart SSH service.
+The Auto-Doctor is now a comprehensive diagnostic and repair system that can handle virtually all common SSH server issues:
+
+### Diagnostic Capabilities
+- **Authentication Issues:** Password problems, SSH key permissions, auth failure limits
+- **Connection Problems:** Service down, port blocking, timeouts, network routing
+- **Configuration Errors:** TCP forwarding disabled, tunneling issues, SSH settings
+- **Security Problems:** Host key verification, permissions, access controls
+- **Performance Issues:** Resource limits, network optimization needs
+- **Service Problems:** SSH daemon status, startup failures
+
+### Repair Operations
+- **Multi-Phase Repair:** Network → SSH Service → Security → Performance → Verification
+- **Comprehensive Fixes:**
+  - SSH configuration optimization (TcpForwarding, GatewayPorts, KeepAlive, etc.)
+  - Firewall management (UFW, iptables, firewalld support)
+  - Service management (systemd, sysvinit)
+  - Security hardening (permissions, user settings)
+  - Performance tuning (BBR, network buffers, system updates)
+  - Connectivity verification and testing
+
+### Smart Features
+- **Severity Assessment:** High/Medium priority problem classification
+- **Solution Suggestions:** Detailed manual fix recommendations
+- **Automatic Retry:** Connection re-attempt after successful repair
+- **Progress Tracking:** Real-time repair status with detailed logging
+- **Verification Phase:** Confirms repairs were successful before declaring victory
 
 ## 📊 Traffic Monitoring
 

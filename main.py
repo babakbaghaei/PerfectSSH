@@ -133,26 +133,52 @@ def main():
                 # Auto-Doctor Logic
                 diagnosis = doctor.analyze_error(msg)
                 if diagnosis['fixable']:
-                    logger.info(f"Auto-doctor diagnosis: {diagnosis['reason']}")
-                    if Confirm.ask(f"[bold yellow]🩺 Doctor Diagnosis: {diagnosis['reason']}. Attempt Auto-Repair?[/bold yellow]"):
+                    logger.info(f"Auto-doctor diagnosis: {diagnosis['reason']} (severity: {diagnosis['severity']})")
+                    
+                    # Display detailed diagnosis
+                    console.print(f"\n[bold yellow]🩺 Advanced Diagnosis:[/bold yellow]")
+                    console.print(f"Problem: {diagnosis['reason']}")
+                    console.print(f"Category: {diagnosis['category'].title()}")
+                    console.print(f"Severity: {diagnosis['severity'].title()}")
+                    
+                    if diagnosis['solutions']:
+                        console.print("\n[cyan]Suggested Solutions:[/cyan]")
+                        for i, solution in enumerate(diagnosis['solutions'], 1):
+                            console.print(f"  {i}. {solution}")
+                    
+                    if Confirm.ask(f"\n[bold yellow]Attempt comprehensive auto-repair?[/bold yellow]"):
                         # Identify target server
                         target_key = 'hop1'
-                        if config['mode'] == '2_hop' and "hop1" not in msg: target_key = 'hop2'
+                        if config['mode'] == '2_hop' and "hop1" not in msg.lower(): 
+                            target_key = 'hop2'
                         
-                        logger.info(f"Attempting auto-repair on {target_key}")
-                        with console.status("Performing Surgery on Server..."):
+                        logger.info(f"Attempting comprehensive auto-repair on {target_key}")
+                        with console.status("[bold yellow]🩺 Performing Advanced Surgery on Server...[/bold yellow]", spinner="dots"):
                             repaired, repair_msg = doctor.repair_server(config[target_key])
                         
                         if repaired:
                             logger.info("Server repair successful, retrying connection")
-                            console.print("[green]Server Repaired Successfully! Retrying connection...[/green]")
-                            time.sleep(1)
-                            manager.connect()
+                            console.print("[green]✅ Server Repaired Successfully! Retrying connection...[/green]")
+                            time.sleep(2)
+                            success, retry_msg = manager.connect()
+                            if success:
+                                console.print("[green]🎉 Connection established after repair![/green]")
+                            else:
+                                console.print(f"[yellow]⚠️ Repair completed but connection still failed: {retry_msg}[/yellow]")
                         else:
                             logger.error(f"Server repair failed: {repair_msg}")
-                            console.print(f"[red]Repair Failed: {repair_msg}[/red]")
+                            console.print(f"[red]❌ Repair Failed: {repair_msg}[/red]")
+                            console.print("[dim]Manual intervention may be required.[/dim]")
+                    else:
+                        console.print("[dim]Repair cancelled by user.[/dim]")
+                else:
+                    console.print(f"[red]❌ Problem not auto-fixable: {diagnosis['reason']}[/red]")
+                    if diagnosis['solutions']:
+                        console.print("[cyan]Manual solutions:[/cyan]")
+                        for solution in diagnosis['solutions']:
+                            console.print(f"  • {solution}")
                 
-                console.input("Press Enter to continue...")
+                console.input("\nPress Enter to continue...")
 
         elif selection == 'set':
             show_settings(manager)

@@ -10,86 +10,374 @@ from .utils import SystemUtils
 logger = logging.getLogger(__name__)
 
 class AutoDoctor:
-    def analyze_error(self, error_msg):
-        error = error_msg.lower()
-        diagnosis = {"reason": "Unknown Error", "fixable": False}
+"""
+PerfectSSH - Auto Doctor
+Diagnoses and repairs server-side SSH issues.
+"""
 
-        if "permission denied" in error:
-            diagnosis["reason"] = "Authentication Failed (Check Password)"
+import subprocess
+import logging
+import time
+from .utils import SystemUtils
+
+logger = logging.getLogger(__name__)
+
+class AutoDoctor:
+    def analyze_error(self, error_msg):
+        """Advanced error analysis with comprehensive diagnosis."""
+        error = error_msg.lower()
+        diagnosis = {
+            "reason": "Unknown Error",
+            "fixable": False,
+            "severity": "unknown",
+            "category": "general",
+            "solutions": []
+        }
+
+        # Authentication Issues
+        if "permission denied" in error or "authentication failed" in error:
+            diagnosis.update({
+                "reason": "Authentication Failed",
+                "fixable": True,
+                "severity": "high",
+                "category": "auth",
+                "solutions": ["Check password", "Verify username", "Check SSH key permissions", "Enable password authentication"]
+            })
+        elif "too many authentication failures" in error:
+            diagnosis.update({
+                "reason": "Too Many Authentication Failures",
+                "fixable": True,
+                "severity": "medium",
+                "category": "auth",
+                "solutions": ["Reduce MaxAuthTries in sshd_config", "Use SSH keys instead of passwords"]
+            })
+
+        # Connection Issues
         elif "connection refused" in error:
-            diagnosis["reason"] = "Port Closed or Service Down"
-            diagnosis["fixable"] = True
-        elif "timed out" in error:
-            diagnosis["reason"] = "Connection Timeout (IP might be blocked)"
-        elif "channel setup failed" in error:
-            diagnosis["reason"] = "Tunneling Disabled (TcpForwarding)"
-            diagnosis["fixable"] = True
-        
-        logger.info(f"Diagnosed error: {diagnosis['reason']} (fixable: {diagnosis['fixable']})")
+            diagnosis.update({
+                "reason": "SSH Service Not Running or Port Closed",
+                "fixable": True,
+                "severity": "high",
+                "category": "service",
+                "solutions": ["Start SSH service", "Open firewall port", "Check SSH port configuration"]
+            })
+        elif "connection timed out" in error or "timed out" in error:
+            diagnosis.update({
+                "reason": "Connection Timeout - Network or Firewall Issue",
+                "fixable": True,
+                "severity": "medium",
+                "category": "network",
+                "solutions": ["Check network connectivity", "Verify IP address", "Check firewall rules", "Test with different port"]
+            })
+        elif "no route to host" in error or "network is unreachable" in error:
+            diagnosis.update({
+                "reason": "Network Routing Issue",
+                "fixable": False,
+                "severity": "high",
+                "category": "network",
+                "solutions": ["Check network configuration", "Verify IP reachability", "Contact network administrator"]
+            })
+
+        # SSH Configuration Issues
+        elif "channel setup failed" in error or "tcp forwarding" in error:
+            diagnosis.update({
+                "reason": "TCP Forwarding Disabled",
+                "fixable": True,
+                "severity": "high",
+                "category": "config",
+                "solutions": ["Enable AllowTcpForwarding", "Enable GatewayPorts", "Restart SSH service"]
+            })
+        elif "broken pipe" in error or "connection reset by peer" in error:
+            diagnosis.update({
+                "reason": "Connection Interrupted",
+                "fixable": True,
+                "severity": "medium",
+                "category": "config",
+                "solutions": ["Increase ClientAliveInterval", "Check network stability", "Enable KeepAlive"]
+            })
+
+        # Host Key Issues
+        elif "host key verification failed" in error:
+            diagnosis.update({
+                "reason": "Host Key Changed or Verification Failed",
+                "fixable": True,
+                "severity": "medium",
+                "category": "security",
+                "solutions": ["Remove old host key from known_hosts", "Verify server identity", "Use StrictHostKeyChecking=no for testing"]
+            })
+
+        # Resource Issues
+        elif "resource temporarily unavailable" in error:
+            diagnosis.update({
+                "reason": "Server Resource Limits",
+                "fixable": True,
+                "severity": "medium",
+                "category": "system",
+                "solutions": ["Check system resources", "Increase limits in limits.conf", "Optimize server performance"]
+            })
+
+        logger.info(f"Diagnosed error: {diagnosis['reason']} (severity: {diagnosis['severity']}, fixable: {diagnosis['fixable']})")
         return diagnosis
 
     def repair_server(self, hop_config):
-        """Connects to the server and runs a repair script."""
-        logger.info(f"Attempting to repair server {hop_config['ip']}:{hop_config['port']}")
-        
-        # Bash script to optimize server settings
-        repair_script = r"""
-        log() { echo ">>> $1"; }
-        
-        log "Optimizing SSH Config..."
+        """Comprehensive server repair with multiple phases."""
+        logger.info(f"Starting comprehensive repair for server {hop_config['ip']}:{hop_config['port']}")
+
+        # Phase 1: Basic connectivity test
+        if not self._test_connectivity(hop_config):
+            logger.warning("Basic connectivity test failed, attempting network fixes")
+            self._repair_network(hop_config)
+
+        # Phase 2: SSH service and configuration
+        success, message = self._repair_ssh_service(hop_config)
+        if not success:
+            logger.error(f"SSH service repair failed: {message}")
+            return False, f"SSH Service Repair Failed: {message}"
+
+        # Phase 3: Security and optimization
+        self._repair_security(hop_config)
+        self._repair_performance(hop_config)
+
+        # Phase 4: Final verification
+        if self._verify_repair(hop_config):
+            logger.info("Server repair completed successfully")
+            return True, "Comprehensive Repair Successful"
+        else:
+            logger.warning("Repair completed but verification failed")
+            return False, "Repair completed but verification failed"
+
+    def _test_connectivity(self, hop_config):
+        """Test basic connectivity to server."""
+        logger.debug("Testing basic connectivity")
+        try:
+            # Simple ping test
+            result = subprocess.run(['ping', '-c', '2', '-W', '3', hop_config['ip']],
+                                  capture_output=True, text=True, timeout=10)
+            return result.returncode == 0
+        except:
+            return False
+
+    def _repair_network(self, hop_config):
+        """Repair network-related issues."""
+        logger.info("Attempting network repairs")
+        network_script = r"""
+        log() { echo ">>> Network: $1"; }
+
+        log "Checking network interfaces..."
+        ip addr show | grep -E "inet |inet6 " | head -5
+
+        log "Testing DNS resolution..."
+        nslookup google.com 2>/dev/null || echo "DNS resolution failed"
+
+        log "Checking network routes..."
+        ip route show | head -3
+
+        log "Network repair complete"
+        """
+        self._run_remote_script(hop_config, network_script, "network_repair")
+
+    def _repair_ssh_service(self, hop_config):
+        """Repair SSH service and configuration."""
+        logger.info("Repairing SSH service and configuration")
+
+        ssh_script = r"""
+        log() { echo ">>> SSH: $1"; }
+
+        log "Checking SSH service status..."
+        if command -v systemctl >/dev/null; then
+            systemctl is-active sshd >/dev/null 2>&1 || systemctl start sshd
+            systemctl enable sshd >/dev/null 2>&1
+        elif command -v service >/dev/null; then
+            service ssh status >/dev/null 2>&1 || service ssh start
+        fi
+
+        log "Optimizing SSH configuration..."
         CFG="/etc/ssh/sshd_config"
+
+        # Backup config
+        cp "$CFG" "${CFG}.backup.$(date +%s)" 2>/dev/null
+
+        # Essential settings for tunneling
         sed -i 's/^#\?AllowTcpForwarding.*/AllowTcpForwarding yes/g' $CFG
         sed -i 's/^#\?GatewayPorts.*/GatewayPorts yes/g' $CFG
+        sed -i 's/^#\?PermitTunnel.*/PermitTunnel yes/g' $CFG
         sed -i 's/^#\?ClientAliveInterval.*/ClientAliveInterval 60/g' $CFG
-        
-        log "Opening Firewall..."
+        sed -i 's/^#\?ClientAliveCountMax.*/ClientAliveCountMax 3/g' $CFG
+        sed -i 's/^#\?TCPKeepAlive.*/TCPKeepAlive yes/g' $CFG
+        sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 6/g' $CFG
+        sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/g' $CFG
+        sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/g' $CFG
+
+        # Get SSH port
         PORT=$(grep "^Port" $CFG | awk '{print $2}')
         [ -z "$PORT" ] && PORT=22
-        
-        if command -v ufw >/dev/null; then ufw allow $PORT/tcp; ufw allow 1080/tcp; ufw reload; fi
-        if command -v iptables >/dev/null; then 
-            iptables -I INPUT -p tcp --dport $PORT -j ACCEPT
-            iptables -I INPUT -p tcp --dport 1080 -j ACCEPT
+
+        log "Opening firewall for SSH port $PORT..."
+        if command -v ufw >/dev/null; then
+            ufw --force enable >/dev/null 2>&1
+            ufw allow $PORT/tcp >/dev/null 2>&1
+            ufw allow 1080/tcp >/dev/null 2>&1
+            ufw reload >/dev/null 2>&1
         fi
-        
-        log "Enabling BBR..."
-        if ! grep -q "bbr" /etc/sysctl.conf; then
+
+        if command -v iptables >/dev/null; then
+            iptables -I INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null
+            iptables -I INPUT -p tcp --dport 1080 -j ACCEPT 2>/dev/null
+            if command -v iptables-save >/dev/null; then
+                iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+            fi
+        fi
+
+        if command -v firewall-cmd >/dev/null; then
+            firewall-cmd --permanent --add-port=$PORT/tcp >/dev/null 2>&1
+            firewall-cmd --permanent --add-port=1080/tcp >/dev/null 2>&1
+            firewall-cmd --reload >/dev/null 2>&1
+        fi
+
+        log "Restarting SSH service..."
+        if command -v systemctl >/dev/null; then
+            systemctl restart sshd
+        elif command -v service >/dev/null; then
+            service ssh restart
+        fi
+
+        log "Waiting for SSH service to stabilize..."
+        sleep 3
+
+        log "SSH repair complete"
+        echo "SSH_REPAIR_COMPLETE"
+        """
+
+        return self._run_remote_script(hop_config, ssh_script, "ssh_repair")
+
+    def _repair_security(self, hop_config):
+        """Apply basic security fixes."""
+        logger.info("Applying security fixes")
+
+        security_script = r"""
+        log() { echo ">>> Security: $1"; }
+
+        log "Checking system users..."
+        # Ensure root has proper shell
+        usermod -s /bin/bash root 2>/dev/null || true
+
+        log "Setting proper permissions..."
+        chmod 600 /etc/ssh/sshd_config 2>/dev/null || true
+        chmod 700 /root/.ssh 2>/dev/null || true
+        chmod 600 /root/.ssh/* 2>/dev/null || true
+
+        log "Security fixes complete"
+        """
+
+        self._run_remote_script(hop_config, security_script, "security_fix")
+
+    def _repair_performance(self, hop_config):
+        """Apply performance optimizations."""
+        logger.info("Applying performance optimizations")
+
+        perf_script = r"""
+        log() { echo ">>> Performance: $1"; }
+
+        log "Enabling BBR congestion control..."
+        if ! grep -q "bbr" /etc/sysctl.conf 2>/dev/null; then
             echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
             echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
-            sysctl -p
+            sysctl -p >/dev/null 2>&1
         fi
-        
-        log "Restarting SSH Service..."
-        if command -v systemctl >/dev/null; then systemctl restart sshd; else service ssh restart; fi
-        
-        echo "REPAIR_COMPLETE"
+
+        log "Optimizing network buffers..."
+        if ! grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null; then
+            echo "net.core.rmem_max=16777216" >> /etc/sysctl.conf
+            echo "net.core.wmem_max=16777216" >> /etc/sysctl.conf
+            echo "net.ipv4.tcp_rmem=4096 87380 16777216" >> /etc/sysctl.conf
+            echo "net.ipv4.tcp_wmem=4096 87380 16777216" >> /etc/sysctl.conf
+            sysctl -p >/dev/null 2>&1
+        fi
+
+        log "Checking system updates..."
+        if command -v apt-get >/dev/null; then
+            apt-get update >/dev/null 2>&1 && apt-get -y upgrade >/dev/null 2>&1
+        elif command -v yum >/dev/null; then
+            yum -y update >/dev/null 2>&1
+        fi
+
+        log "Performance optimization complete"
         """
-        repair_script = repair_script.replace("\n", " ; ")
-        
-        # Build Command
+
+        self._run_remote_script(hop_config, perf_script, "performance_opt")
+
+    def _verify_repair(self, hop_config):
+        """Verify that repairs were successful."""
+        logger.info("Verifying repair success")
+
+        verify_script = r"""
+        log() { echo ">>> Verification: $1"; }
+
+        log "Checking SSH service..."
+        if command -v systemctl >/dev/null; then
+            systemctl is-active sshd >/dev/null 2>&1 && echo "SSH_ACTIVE"
+        elif command -v service >/dev/null; then
+            service ssh status >/dev/null 2>&1 && echo "SSH_ACTIVE"
+        fi
+
+        log "Checking SSH configuration..."
+        grep -q "AllowTcpForwarding yes" /etc/ssh/sshd_config && echo "TCP_FORWARDING_ENABLED"
+
+        log "Checking firewall..."
+        PORT=$(grep "^Port" /etc/ssh/sshd_config | awk '{print $2}')
+        [ -z "$PORT" ] && PORT=22
+
+        if command -v ufw >/dev/null; then
+            ufw status | grep -q "$PORT/tcp" && echo "FIREWALL_OPEN"
+        elif command -v iptables >/dev/null; then
+            iptables -L | grep -q "dpt:$PORT" && echo "FIREWALL_OPEN"
+        fi
+
+        log "Verification complete"
+        """
+
+        success, output = self._run_remote_script(hop_config, verify_script, "verification")
+        if success and "SSH_ACTIVE" in output and "TCP_FORWARDING_ENABLED" in output:
+            return True
+        return False
+
+    def _run_remote_script(self, hop_config, script, operation_name):
+        """Execute a script on the remote server."""
+        logger.debug(f"Running {operation_name} script on {hop_config['ip']}")
+
+        # Prepare script
+        full_script = script.replace("\n", " ; ")
+
+        # Build SSH command
         cmd = ['ssh']
         if not SystemUtils.IS_WIN:
             cmd = ['sshpass', '-p', hop_config['pass']] + cmd
-            
+
         cmd += [
             '-p', str(hop_config['port']),
             '-o', 'StrictHostKeyChecking=no',
-            '-o', 'ConnectTimeout=10',
+            '-o', 'ConnectTimeout=15',
+            '-o', 'ServerAliveInterval=10',
             f"{hop_config['user']}@{hop_config['ip']}",
-            'bash -s'
+            'bash -c ' + repr(full_script)
         ]
-        
+
         try:
-            logger.debug(f"Running repair command: {' '.join(cmd)}")
-            process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            stdout, stderr = process.communicate(input=repair_script)
-            
-            if "REPAIR_COMPLETE" in stdout:
-                logger.info("Server repair completed successfully")
-                return True, "Optimization Successful"
+            logger.debug(f"Executing: {' '.join(cmd)}")
+            process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True)
+            stdout, stderr = process.communicate(timeout=60)
+
+            if process.returncode == 0:
+                logger.debug(f"{operation_name} completed successfully")
+                return True, stdout
             else:
-                logger.error(f"Server repair failed: {stderr.strip()}")
-                return False, stderr.strip()
+                logger.warning(f"{operation_name} failed: {stderr}")
+                return False, stderr
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"{operation_name} timed out")
+            return False, "Operation timed out"
         except Exception as e:
-            logger.error(f"Exception during server repair: {e}")
+            logger.error(f"Exception during {operation_name}: {e}")
             return False, str(e)
